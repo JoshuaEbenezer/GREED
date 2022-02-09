@@ -1,4 +1,5 @@
 import numpy as np
+from joblib import dump
 from numba import jit,prange,njit
 import matplotlib.pyplot as plt
 from entropy.yuvRead import yuvRead_frame
@@ -130,12 +131,17 @@ def video_process(vid_path, width, height, bit_depth, gray, T, filt, num_levels,
         
         spatial_MS_brisque_list = []
         for frame_ind in range(0, T):
-            frame_data[:,:,frame_ind],_,_ = \
+            frame,_,_ = \
             yuvRead_frame(vid_stream, width, height, \
                                   frame_ind, bit_depth, gray, sz)
             
             window = gen_gauss_window((win_len-1)/2,win_len/6)
-            MS_frame = compute_MS_transform(frame_data[:,:,frame_ind], window)
+            MS_frame = compute_MS_transform(frame, window)
+#            MSCN_frame = compute_image_mscn_transform(frame, avg_window=window)
+
+            frame_data[:,:,frame_ind] = MS_frame
+
+            
         
 #            spatial_MS_brisque = brisque(MS_frame)
 #            spatial_MS_brisque_list.append(spatial_MS_brisque)
@@ -159,10 +165,15 @@ def video_process(vid_path, width, height, bit_depth, gray, T, filt, num_levels,
             sts = find_kurtosis_sts(Y_block,st_time_length,cy,cx,rst,rct,theta)
             sts_arr = unblockshaped(np.reshape(sts,(-1,st_time_length,st_time_length)),r1*st_time_length,r2*st_time_length)
 
+#            feats =  ChipQA.save_stats.brisque(sts_arr)
+
+            dump(sts_arr,'./sts_arr_temporalbp_MSthentemp_data/'+base+'_'+str(index*5)+'_'+str(freq)+'.z')
+
             plt.figure()
             plt.clf()
             plt.hist(sts_arr.flatten(),histtype='step',bins='auto',density=True)
-            plt.savefig('./images/sts_arr_temporalbp_MS_'+base+'_'+str(index*5)+'_'+str(freq)+'.png')
+            plt.savefig('./images/sts_arr_MS_temporalbp_'+base+'_'+str(index*5)+'_'+str(freq)+'.png')
+            plt.clear()
             
 #            for frame_ind in range(valid_lim):
 #                temporal_brisque_feats[freq,frame_ind,:] = brisque(dpt_filt[:,:,freq,frame_ind])

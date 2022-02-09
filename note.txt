@@ -1,0 +1,2 @@
+sts_arr_temporal_data has Chips computed from frame data that has been passed through temporal bandpass filtering ONLY
+sts_arr_temporal_MSCN_data has Chips computed from MSCNs-> temporal bandpass
