@@ -1,5 +1,7 @@
 import numpy as np
+import cv2
 from joblib import dump
+import save_stats
 from numba import jit,prange,njit
 import matplotlib.pyplot as plt
 from entropy.yuvRead import yuvRead_frame
@@ -116,10 +118,9 @@ def video_process(vid_path, width, height, bit_depth, gray, T, filt, num_levels,
     sigma_nsq = 0.1
     win_len = 7
     
-    mult_scale_temporal_brisque=[]
-    mult_scale_spatialMS_brisque = []
     vid_stream = open(vid_path,'r')
     
+    scale_set = []
     for scale_factor in scales:
         sz = 2**(-scale_factor)
         frame_data = np.zeros((int(height*sz),int(width*sz),T))
@@ -128,60 +129,72 @@ def video_process(vid_path, width, height, bit_depth, gray, T, filt, num_levels,
         cy, cx = np.mgrid[st_time_length:h-st_time_length*4:st_time_length*4, st_time_length:w-st_time_length*4:st_time_length*4].reshape(2,-1).astype(int) # these will be the centers of each block
         r1 = len(np.arange(st_time_length,h-st_time_length*4,st_time_length*4)) 
         r2 = len(np.arange(st_time_length,w-st_time_length*4,st_time_length*4)) 
+
+        brisque_feats_list = []
         
-        spatial_MS_brisque_list = []
         for frame_ind in range(0, T):
             frame,_,_ = \
             yuvRead_frame(vid_stream, width, height, \
                                   frame_ind, bit_depth, gray, sz)
             
             window = gen_gauss_window((win_len-1)/2,win_len/6)
-            MS_frame = compute_MS_transform(frame, window)
-#            MSCN_frame = compute_image_mscn_transform(frame, avg_window=window)
+#            MS_frame = compute_MS_transform(frame, window)
 
-            frame_data[:,:,frame_ind] = MS_frame
+            gradient_x = cv2.Sobel(frame,ddepth=-1,dx=1,dy=0)
+            gradient_y = cv2.Sobel(frame,ddepth=-1,dx=0,dy=1)
+            gradient_mag = np.sqrt(gradient_x**2+gradient_y**2)    
+
+            frame_data[:,:,frame_ind] = gradient_mag 
+            MSCN_frame,_,_ = compute_image_mscn_transform(gradient_mag, avg_window=window)
+            brisque_feats = save_stats.brisque(MSCN_frame)
+            brisque_feats_list.append(brisque_feats)
 
             
         
 #            spatial_MS_brisque = brisque(MS_frame)
 #            spatial_MS_brisque_list.append(spatial_MS_brisque)
         
+        brisque_avg_feats = np.average(brisque_feats_list,0)
         #Wavelet Packet Filtering
         #valid indices for start and end points
         valid_lim = frame_data.shape[2] - wfun.shape[1] + 1
         start_ind = wfun.shape[1]//2 - 1
         dpt_filt = np.zeros((frame_data.shape[0], frame_data.shape[1],\
                              2**num_levels - 1, valid_lim))
-#        temporal_brisque_feats = np.zeros((2**num_levels - 1, valid_lim,18))
+        Y_block = np.zeros((frame_data.shape[0],frame_data.shape[1],5))
+        block_index = 0
         
+        freq_scale_feats = np.zeros((wfun.shape[0],36))
+
         for freq in range(wfun.shape[0]):
             dpt_filt[:,:,freq,:] = scipy.ndimage.filters.convolve1d(frame_data,\
                     wfun[freq,:],axis=2,mode='constant')[:,:,start_ind:start_ind + valid_lim]
 
+        
+            chipqa_feats = []
+            brisque_temp_feats_list = []
+            for frame_ind in range(valid_lim):
+                MSCN_frame,_,_ = compute_image_mscn_transform(dpt_filt[:,:,freq,frame_ind], avg_window=window)
+
+                brisque_temp_feats = save_stats.brisque(MSCN_frame)
+                brisque_temp_feats_list.append(brisque_temp_feats)
+
+                Y_block[:,:,block_index] = MSCN_frame
+                block_index = block_index+1
+
+                if(block_index==5):
+                    sts = find_kurtosis_sts(Y_block,st_time_length,cy,cx,rst,rct,theta)
+                    sts_arr = unblockshaped(np.reshape(sts,(-1,st_time_length,st_time_length)),r1*st_time_length,r2*st_time_length)
+
+                    feats =  save_stats.brisque(sts_arr)
+                    chipqa_feats.append(feats)
+                    block_index = 0
 
 
-            index = 7
-            Y_block = dpt_filt[:,:,freq,index*5:(index+1)*5]
-            sts = find_kurtosis_sts(Y_block,st_time_length,cy,cx,rst,rct,theta)
-            sts_arr = unblockshaped(np.reshape(sts,(-1,st_time_length,st_time_length)),r1*st_time_length,r2*st_time_length)
+            brisque_avg_temp_feats= np.average(brisque_temp_feats_list,0)
+            chipqa_avg_feats= np.average(chipqa_feats,0)
+            freq_scale_feats[freq,:] = np.concatenate((brisque_avg_temp_feats,chipqa_avg_feats),0)
+        scale_set.append(freq_scale_feats.flatten())
 
-#            feats =  ChipQA.save_stats.brisque(sts_arr)
 
-            dump(sts_arr,'./sts_arr_temporalbp_MSthentemp_data/'+base+'_'+str(index*5)+'_'+str(freq)+'.z')
-
-            plt.figure()
-            plt.clf()
-            plt.hist(sts_arr.flatten(),histtype='step',bins='auto',density=True)
-            plt.savefig('./images/sts_arr_MS_temporalbp_'+base+'_'+str(index*5)+'_'+str(freq)+'.png')
-            plt.clear()
-            
-#            for frame_ind in range(valid_lim):
-#                temporal_brisque_feats[freq,frame_ind,:] = brisque(dpt_filt[:,:,freq,frame_ind])
-        return 0,0
-#        mult_scale_temporal_brisque.append(temporal_brisque_feats)
-#        mult_scale_spatialMS_brisque.append(np.asarray(spatial_MS_brisque_list))
-#    mult_scale_temporal_brisque = np.asarray(mult_scale_temporal_brisque)
-#    mult_scale_spatialMS_brisque=np.asarray(mult_scale_spatialMS_brisque)
-#    print(mult_scale_temporal_brisque.shape)
-#    print(mult_scale_spatialMS_brisque.shape)
-#    return mult_scale_spatialMS_brisque,mult_scale_temporal_brisque
+    return np.asarray(scale_set)

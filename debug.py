@@ -9,7 +9,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Generate ChipQA features from a folder of videos and store them')
 parser.add_argument('--input_folder',help='Folder containing input videos')
-#parser.add_argument('--results_folder',help='Folder where features are stored')
+parser.add_argument('--results_folder',help='Folder where features are stored')
 
 args = parser.parse_args()
 def greed_feat(vid_path):
@@ -48,10 +48,10 @@ def greed_feat(vid_path):
     
     
     #calculate spatial entropy
-    mult_scale_spatialMS_brisque,mult_scale_temporal_brisque = video_process(vid_path, width, height, bit_depth, gray, \
+    mult_scale_chipqa_brisque_brisquetemp= video_process(vid_path, width, height, bit_depth, gray, \
                                    vid_T, filt, num_levels, scales)
     
-    return mult_scale_spatialMS_brisque,mult_scale_temporal_brisque
+    return mult_scale_chipqa_brisque_brisquetemp
 
 import argparse
 import os
@@ -77,7 +77,7 @@ def main(i,path_list,outfolder):
     
     GREED_feat = greed_feat(vid_path)
     print(GREED_feat)
-#    dump(GREED_feat,outname)
+    dump(GREED_feat,outname)
     return
 
 
@@ -89,10 +89,10 @@ if __name__ == '__main__':
     path_list =glob.glob(os.path.join(args.input_folder,'*.yuv'))#  [os.path.join(args.input_folder,f.split('_')[0],f+'.yuv') for f in files]
     print(files)
     print(path_list)
-    outfolder = './'#args.results_folder
-#    if(os.path.exists(outfolder)==False):
-#        os.mkdir(outfolder)
-    Parallel(n_jobs=40)(delayed(main)\
+    outfolder = args.results_folder
+    if(os.path.exists(outfolder)==False):
+        os.mkdir(outfolder)
+    Parallel(n_jobs=80)(delayed(main)\
             (i,path_list,outfolder)\
             for i in range(len(path_list)))
 #    main(args.ref_path,outfolder)
