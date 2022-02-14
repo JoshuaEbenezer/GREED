@@ -1,4 +1,7 @@
 *.png
-*.z
+sts_arr_temporalbp_tempthenMSCN_data/
+sts_arr_temporalbp_MSthentemp_data/
+sts_arr_temporalbp_MSCNthentemp_data/
+sts_arr_temporalbp_MSCN_data/
 *.pyc
 *.yuv
