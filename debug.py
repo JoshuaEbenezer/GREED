@@ -20,6 +20,7 @@ def greed_feat(vid_path):
     height = 2160
     width =3840 
     gray = True
+    fourkcontent = 
     bit_depth = 8
     
     if bit_depth == 8:
@@ -48,10 +49,10 @@ def greed_feat(vid_path):
     
     
     #calculate spatial entropy
-    mult_scale_chipqa_brisque_brisquetemp= video_process(vid_path, width, height, bit_depth, gray, \
+    mult_scale_chipqa_MSCNthentemp= video_process(vid_path, width, height, bit_depth, gray, \
                                    vid_T, filt, num_levels, scales)
     
-    return mult_scale_chipqa_brisque_brisquetemp
+    return mult_scale_chipqa_MSCNthentemp
 
 import argparse
 import os
@@ -90,8 +91,7 @@ if __name__ == '__main__':
     print(files)
     print(path_list)
     outfolder = args.results_folder
-    if(os.path.exists(outfolder)==False):
-        os.mkdir(outfolder)
+    os.makedirs(outfolder,exist_ok=True)
     Parallel(n_jobs=80)(delayed(main)\
             (i,path_list,outfolder)\
             for i in range(len(path_list)))

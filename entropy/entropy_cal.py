@@ -140,21 +140,18 @@ def video_process(vid_path, width, height, bit_depth, gray, T, filt, num_levels,
             window = gen_gauss_window((win_len-1)/2,win_len/6)
 #            MS_frame = compute_MS_transform(frame, window)
 
-            gradient_x = cv2.Sobel(frame,ddepth=-1,dx=1,dy=0)
-            gradient_y = cv2.Sobel(frame,ddepth=-1,dx=0,dy=1)
-            gradient_mag = np.sqrt(gradient_x**2+gradient_y**2)    
+#            gradient_x = cv2.Sobel(frame,ddepth=-1,dx=1,dy=0)
+#            gradient_y = cv2.Sobel(frame,ddepth=-1,dx=0,dy=1)
+#            gradient_mag = np.sqrt(gradient_x**2+gradient_y**2)    
 
-            frame_data[:,:,frame_ind] = gradient_mag 
-            MSCN_frame,_,_ = compute_image_mscn_transform(gradient_mag, avg_window=window)
-            brisque_feats = save_stats.brisque(MSCN_frame)
-            brisque_feats_list.append(brisque_feats)
+            MSCN_frame,_,_ = compute_image_mscn_transform(frame, avg_window=window)
+            frame_data[:,:,frame_ind] = MSCN_frame
 
             
         
 #            spatial_MS_brisque = brisque(MS_frame)
 #            spatial_MS_brisque_list.append(spatial_MS_brisque)
         
-        brisque_avg_feats = np.average(brisque_feats_list,0)
         #Wavelet Packet Filtering
         #valid indices for start and end points
         valid_lim = frame_data.shape[2] - wfun.shape[1] + 1
@@ -162,9 +159,8 @@ def video_process(vid_path, width, height, bit_depth, gray, T, filt, num_levels,
         dpt_filt = np.zeros((frame_data.shape[0], frame_data.shape[1],\
                              2**num_levels - 1, valid_lim))
         Y_block = np.zeros((frame_data.shape[0],frame_data.shape[1],5))
-        block_index = 0
         
-        freq_scale_feats = np.zeros((wfun.shape[0],36))
+        freq_scale_feats = np.zeros((wfun.shape[0],18))
 
         for freq in range(wfun.shape[0]):
             dpt_filt[:,:,freq,:] = scipy.ndimage.filters.convolve1d(frame_data,\
@@ -173,27 +169,18 @@ def video_process(vid_path, width, height, bit_depth, gray, T, filt, num_levels,
         
             chipqa_feats = []
             brisque_temp_feats_list = []
-            for frame_ind in range(valid_lim):
-                MSCN_frame,_,_ = compute_image_mscn_transform(dpt_filt[:,:,freq,frame_ind], avg_window=window)
+            for frame_ind in range(0,valid_lim,5):
 
-                brisque_temp_feats = save_stats.brisque(MSCN_frame)
-                brisque_temp_feats_list.append(brisque_temp_feats)
+                Y_block = dpt_filt[:,:,freq,frame_ind*5:(frame_ind+1)*5]
+                sts = find_kurtosis_sts(Y_block,st_time_length,cy,cx,rst,rct,theta)
+                sts_arr = unblockshaped(np.reshape(sts,(-1,st_time_length,st_time_length)),r1*st_time_length,r2*st_time_length)
 
-                Y_block[:,:,block_index] = MSCN_frame
-                block_index = block_index+1
-
-                if(block_index==5):
-                    sts = find_kurtosis_sts(Y_block,st_time_length,cy,cx,rst,rct,theta)
-                    sts_arr = unblockshaped(np.reshape(sts,(-1,st_time_length,st_time_length)),r1*st_time_length,r2*st_time_length)
-
-                    feats =  save_stats.brisque(sts_arr)
-                    chipqa_feats.append(feats)
-                    block_index = 0
+                feats =  save_stats._extract_subband_feats(sts_arr)
+                chipqa_feats.append(feats)
 
 
-            brisque_avg_temp_feats= np.average(brisque_temp_feats_list,0)
             chipqa_avg_feats= np.average(chipqa_feats,0)
-            freq_scale_feats[freq,:] = np.concatenate((brisque_avg_temp_feats,chipqa_avg_feats),0)
+            freq_scale_feats[freq,:] = chipqa_avg_feats
         scale_set.append(freq_scale_feats.flatten())
 
 
